@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+venv/
+ENV/
+env/
+
+# Modelfiles / Quantized files
+*.gguf
+*.bin
+*.pth
+*.pt
+Gemma-4-E4B-it-PARL/
+
+# Compile output & Third-party
+llama.cpp/
+
+# OS specific
+.DS_Store
+Thumbs.db
