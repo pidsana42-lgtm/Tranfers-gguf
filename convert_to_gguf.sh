@@ -21,18 +21,18 @@ QUANT_TYPE="Q4_K_M" # Recommended 4-bit quantization method
 echo "=== 1. Installing System Dependencies and Python Packages ==="
 # Update and install system dependencies if needed (for Debian/Ubuntu based cloud instances)
 if [ -x "$(command -v apt-get)" ]; then
-    sudo apt-get update && sudo apt-get install -y git build-essential python3-pip python3-venv
+    sudo apt-get update && sudo apt-get install -y git build-essential python3-pip python3-venv cmake
 fi
 
 # Create a virtual environment to keep things clean
 python3 -m venv venv
 source venv/bin/activate
 
-# Install required python packages
+# Install required python packages including cmake
 pip install --upgrade pip
-pip install huggingface_hub torch transformers accelerator sentencepiece
+pip install huggingface_hub torch transformers accelerator sentencepiece cmake
 
-echo "=== 2. Cloning llama.cpp and Compiling ==="
+echo "=== 2. Cloning llama.cpp and Compiling via CMake ==="
 if [ ! -d "llama.cpp" ]; then
     git clone https://github.com/ggerganov/llama.cpp.git
 fi
@@ -41,9 +41,9 @@ cd llama.cpp
 # Install llama.cpp conversion dependencies
 pip install -r requirements.txt
 
-# Compile llama.cpp to build llama-quantize
-# Using -j flag to compile using multiple cores
-make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+# Compile llama.cpp using CMake (Makefile has been deprecated in llama.cpp)
+cmake -B build
+cmake --build build --config Release -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
 
 cd ..
 
@@ -68,8 +68,15 @@ python3 llama.cpp/convert_hf_to_gguf.py ./$MODEL_NAME \
     --outtype f16
 
 echo "=== 5. Quantizing model to 4-bit ($QUANT_TYPE) ==="
+# Dynamically locate the llama-quantize binary built by CMake
+QUANTIZE_BIN=$(find llama.cpp/build -name "llama-quantize" -type f -print -quit 2>/dev/null || echo "")
+if [ -z "$QUANTIZE_BIN" ]; then
+    QUANTIZE_BIN="./llama.cpp/build/bin/llama-quantize"
+fi
+
+echo "Using llama-quantize binary at: $QUANTIZE_BIN"
 # Run llama-quantize
-./llama.cpp/llama-quantize ./${MODEL_NAME}-f16.gguf ./${MODEL_NAME}-${QUANT_TYPE}.gguf $QUANT_TYPE
+$QUANTIZE_BIN ./${MODEL_NAME}-f16.gguf ./${MODEL_NAME}-${QUANT_TYPE}.gguf $QUANT_TYPE
 
 echo "=== 6. Conversion Complete! ==="
 echo "Converted model saved to: ./${MODEL_NAME}-${QUANT_TYPE}.gguf"

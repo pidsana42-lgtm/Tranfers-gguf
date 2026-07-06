@@ -30,19 +30,20 @@ def run_command(command, cwd=None):
 def main():
     print("=== Step 1: Installing dependencies ===")
     run_command("pip install --upgrade pip")
-    run_command("pip install huggingface_hub torch transformers accelerator sentencepiece")
+    run_command("pip install huggingface_hub torch transformers accelerator sentencepiece cmake")
 
-    print("\n=== Step 2: Cloning and compiling llama.cpp ===")
+    print("\n=== Step 2: Cloning and compiling llama.cpp via CMake ===")
     if not os.path.exists("llama.cpp"):
         run_command("git clone https://github.com/ggerganov/llama.cpp.git")
     
     # Install conversion requirements
     run_command("pip install -r requirements.txt", cwd="llama.cpp")
     
-    # Compile llama.cpp
+    # Compile llama.cpp using CMake
+    run_command("cmake -B build", cwd="llama.cpp")
     import multiprocessing
     cores = multiprocessing.cpu_count()
-    run_command(f"make -j{cores}", cwd="llama.cpp")
+    run_command(f"cmake --build build --config Release -j {cores}", cwd="llama.cpp")
 
     print("\n=== Step 3: Downloading model from Hugging Face ===")
     from huggingface_hub import snapshot_download
@@ -61,7 +62,22 @@ def main():
     run_command(f"python3 {convert_script} ./{MODEL_NAME} --outfile {output_f16} --outtype f16")
 
     print(f"\n=== Step 5: Quantizing to 4-bit ({QUANT_TYPE}) ===")
-    quantize_bin = os.path.join("llama.cpp", "llama-quantize")
+    # Dynamically find the llama-quantize binary in the build directory
+    quantize_bin = None
+    build_dir = os.path.join("llama.cpp", "build")
+    for root, dirs, files in os.walk(build_dir):
+        for file in files:
+            if file == "llama-quantize" or file == "llama-quantize.exe":
+                quantize_bin = os.path.join(root, file)
+                break
+        if quantize_bin:
+            break
+            
+    if not quantize_bin:
+        # Fallback to default CMake output path
+        quantize_bin = os.path.join("llama.cpp", "build", "bin", "llama-quantize")
+        
+    print(f"Found llama-quantize at: {quantize_bin}")
     output_quant = f"./{MODEL_NAME}-{QUANT_TYPE}.gguf"
     run_command(f"{quantize_bin} {output_f16} {output_quant} {QUANT_TYPE}")
 
