@@ -4,6 +4,7 @@
 # Script for converting Hugging Face model to GGUF and quantizing to 4-bit (Q4_K_M)
 # Target Model: Phonsiri/Gemma-4-E4B-it-PARL
 # Designed to run on Cloud environments (Google Colab, RunPod, Vast.ai, etc.)
+# Now includes automatic vision projector (mmproj) extraction and upload.
 # ==============================================================================
 
 # Hugging Face Configuration (Fill these in to automatically upload the converted model)
@@ -82,6 +83,11 @@ python3 llama.cpp/convert_hf_to_gguf.py ./$MODEL_NAME \
     --outfile ./${MODEL_NAME}-f16.gguf \
     --outtype f16
 
+echo "=== 4b. Extracting and Converting Multimodal Vision Projector (mmproj) ==="
+python3 llama.cpp/convert_hf_to_gguf.py ./$MODEL_NAME \
+    --mmproj \
+    --outfile ./${MODEL_NAME}-mmproj.gguf
+
 echo "=== 5. Quantizing model to 4-bit ($QUANT_TYPE) ==="
 # Dynamically locate the llama-quantize binary built by CMake
 QUANTIZE_BIN=$(find llama.cpp/build -name "llama-quantize" -type f -print -quit 2>/dev/null || echo "")
@@ -96,15 +102,21 @@ $QUANTIZE_BIN ./${MODEL_NAME}-f16.gguf ./${MODEL_NAME}-${QUANT_TYPE}.gguf $QUANT
 echo "=== 6. Conversion Complete! ==="
 echo "Converted model saved to: ./${MODEL_NAME}-${QUANT_TYPE}.gguf"
 ls -lh ./${MODEL_NAME}-${QUANT_TYPE}.gguf
+if [ -f "./${MODEL_NAME}-mmproj.gguf" ]; then
+    echo "Vision Projector saved to: ./${MODEL_NAME}-mmproj.gguf"
+    ls -lh ./${MODEL_NAME}-mmproj.gguf
+fi
 
 echo "=== 7. Uploading Model to Hugging Face ==="
 if [ -n "$HF_TOKEN" ] && [ -n "$HF_USERNAME" ] && [ -n "$HF_REPO_NAME" ]; then
     python3 -c "
 from huggingface_hub import HfApi
+import os
 api = HfApi()
 repo_id = '$HF_USERNAME/$HF_REPO_NAME'
 print(f'Creating repo {repo_id} if it does not exist...')
 api.create_repo(repo_id=repo_id, repo_type='model', exist_ok=True, token='$HF_TOKEN')
+
 print(f'Uploading ${MODEL_NAME}-${QUANT_TYPE}.gguf to HF Hub Repository {repo_id}...')
 api.upload_file(
     path_or_fileobj='./${MODEL_NAME}-${QUANT_TYPE}.gguf',
@@ -113,9 +125,20 @@ api.upload_file(
     repo_type='model',
     token='$HF_TOKEN'
 )
+
+mmproj_path = './${MODEL_NAME}-mmproj.gguf'
+if os.path.exists(mmproj_path):
+    print(f'Uploading vision projector {mmproj_path} to HF Hub Repository {repo_id}...')
+    api.upload_file(
+        path_or_fileobj=mmproj_path,
+        path_in_repo='${MODEL_NAME}-mmproj.gguf',
+        repo_id=repo_id,
+        repo_type="model",
+        token='$HF_TOKEN'
+    )
 print('Upload complete!')
 "
 else
     echo "Hugging Face credentials (HF_USERNAME, HF_TOKEN, or HF_REPO_NAME) are empty."
-    echo "Skipping automatic upload. You can manually upload the file ./${MODEL_NAME}-${QUANT_TYPE}.gguf"
+    echo "Skipping automatic upload. You can manually upload the files."
 fi

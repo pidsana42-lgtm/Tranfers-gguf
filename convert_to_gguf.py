@@ -2,6 +2,7 @@
 """
 Python script to convert Phonsiri/Gemma-4-E4B-it-PARL to GGUF format 
 and perform 4-bit quantization (Q4_K_M) on a cloud server.
+Now includes automatic vision projector (mmproj) extraction and upload.
 """
 
 import os
@@ -90,6 +91,10 @@ def main():
     output_f16 = f"./{MODEL_NAME}-f16.gguf"
     run_command(f"python3 {convert_script} ./{MODEL_NAME} --outfile {output_f16} --outtype f16")
 
+    print("\n=== Step 4b: Extracting and Converting Multimodal Vision Projector (mmproj) ===")
+    output_mmproj = f"./{MODEL_NAME}-mmproj.gguf"
+    run_command(f"python3 {convert_script} ./{MODEL_NAME} --mmproj --outfile {output_mmproj}")
+
     print(f"\n=== Step 5: Quantizing to 4-bit ({QUANT_TYPE}) ===")
     # Dynamically find the llama-quantize binary in the build directory
     quantize_bin = None
@@ -115,6 +120,9 @@ def main():
     if os.path.exists(output_quant):
         size_gb = os.path.getsize(output_quant) / (1024 * 1024 * 1024)
         print(f"File size: {size_gb:.2f} GB")
+    if os.path.exists(output_mmproj):
+        size_mb = os.path.getsize(output_mmproj) / (1024 * 1024)
+        print(f"Vision Projector size: {size_mb:.2f} MB")
 
     print("\n=== Step 6: Uploading to Hugging Face ===")
     if HF_USERNAME and HF_TOKEN and HF_REPO_NAME:
@@ -123,6 +131,8 @@ def main():
         repo_id = f"{HF_USERNAME}/{HF_REPO_NAME}"
         print(f"Creating repo {repo_id} if it does not exist...")
         api.create_repo(repo_id=repo_id, repo_type="model", exist_ok=True, token=HF_TOKEN)
+        
+        # 1. Upload main language model GGUF (4-bit)
         print(f"Uploading {output_quant} to Hugging Face Repository {repo_id}...")
         api.upload_file(
             path_or_fileobj=output_quant,
@@ -131,6 +141,18 @@ def main():
             repo_type="model",
             token=HF_TOKEN
         )
+        
+        # 2. Upload vision projector GGUF (mmproj)
+        if os.path.exists(output_mmproj):
+            print(f"Uploading vision projector {output_mmproj} to Hugging Face Repository {repo_id}...")
+            api.upload_file(
+                path_or_fileobj=output_mmproj,
+                path_in_repo=f"{MODEL_NAME}-mmproj.gguf",
+                repo_id=repo_id,
+                repo_type="model",
+                token=HF_TOKEN
+            )
+            
         print("Upload completed successfully!")
     else:
         print("Hugging Face credentials (HF_USERNAME, HF_TOKEN, or HF_REPO_NAME) are empty.")
