@@ -7,8 +7,9 @@
 # ==============================================================================
 
 # Hugging Face Configuration (Fill these in to automatically upload the converted model)
-HF_USERNAME="" # Enter your Hugging Face username here
-HF_TOKEN=""    # Enter your Hugging Face write token here (starts with hf_...)
+HF_USERNAME="Phonsiri"                 # Your Hugging Face username
+HF_TOKEN=""                            # Your Hugging Face write token (starts with hf_...)
+HF_REPO_NAME="Gemma-4-E4B-it-PARL-GGUF" # Name of the target Hugging Face repository to push to
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -75,14 +76,14 @@ echo "Converted model saved to: ./${MODEL_NAME}-${QUANT_TYPE}.gguf"
 ls -lh ./${MODEL_NAME}-${QUANT_TYPE}.gguf
 
 echo "=== 7. Uploading Model to Hugging Face ==="
-if [ -n "$HF_TOKEN" ] && [ -n "$HF_USERNAME" ]; then
+if [ -n "$HF_TOKEN" ] && [ -n "$HF_USERNAME" ] && [ -n "$HF_REPO_NAME" ]; then
     python3 -c "
 from huggingface_hub import HfApi
 api = HfApi()
-repo_id = '$HF_USERNAME/${MODEL_NAME}-GGUF'
+repo_id = '$HF_USERNAME/$HF_REPO_NAME'
 print(f'Creating repo {repo_id} if it does not exist...')
 api.create_repo(repo_id=repo_id, repo_type='model', exist_ok=True, token='$HF_TOKEN')
-print(f'Uploading ${MODEL_NAME}-${QUANT_TYPE}.gguf to HF Hub...')
+print(f'Uploading ${MODEL_NAME}-${QUANT_TYPE}.gguf to HF Hub Repository {repo_id}...')
 api.upload_file(
     path_or_fileobj='./${MODEL_NAME}-${QUANT_TYPE}.gguf',
     path_in_repo='${MODEL_NAME}-${QUANT_TYPE}.gguf',
@@ -93,6 +94,6 @@ api.upload_file(
 print('Upload complete!')
 "
 else
-    echo "Hugging Face credentials (HF_USERNAME or HF_TOKEN) are empty."
+    echo "Hugging Face credentials (HF_USERNAME, HF_TOKEN, or HF_REPO_NAME) are empty."
     echo "Skipping automatic upload. You can manually upload the file ./${MODEL_NAME}-${QUANT_TYPE}.gguf"
 fi

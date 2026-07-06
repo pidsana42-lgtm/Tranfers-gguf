@@ -9,8 +9,9 @@ import subprocess
 import sys
 
 # Hugging Face Configuration (Fill these in to automatically upload the converted model)
-HF_USERNAME = "" # Enter your Hugging Face username here
-HF_TOKEN = ""    # Enter your Hugging Face write token here (starts with hf_...)
+HF_USERNAME = "Phonsiri"                      # Your Hugging Face username
+HF_TOKEN = ""                                 # Your Hugging Face write token (starts with hf_...)
+HF_REPO_NAME = "Gemma-4-E4B-it-PARL-GGUF"     # Name of the target Hugging Face repository to push to
 
 MODEL_ID = "Phonsiri/Gemma-4-E4B-it-PARL"
 MODEL_NAME = "Gemma-4-E4B-it-PARL"
@@ -71,13 +72,13 @@ def main():
         print(f"File size: {size_gb:.2f} GB")
 
     print("\n=== Step 6: Uploading to Hugging Face ===")
-    if HF_USERNAME and HF_TOKEN:
+    if HF_USERNAME and HF_TOKEN and HF_REPO_NAME:
         from huggingface_hub import HfApi
         api = HfApi()
-        repo_id = f"{HF_USERNAME}/{MODEL_NAME}-GGUF"
+        repo_id = f"{HF_USERNAME}/{HF_REPO_NAME}"
         print(f"Creating repo {repo_id} if it does not exist...")
         api.create_repo(repo_id=repo_id, repo_type="model", exist_ok=True, token=HF_TOKEN)
-        print(f"Uploading {output_quant}...")
+        print(f"Uploading {output_quant} to Hugging Face Repository {repo_id}...")
         api.upload_file(
             path_or_fileobj=output_quant,
             path_in_repo=f"{MODEL_NAME}-{QUANT_TYPE}.gguf",
@@ -87,7 +88,7 @@ def main():
         )
         print("Upload completed successfully!")
     else:
-        print("Hugging Face credentials (HF_USERNAME or HF_TOKEN) are empty.")
+        print("Hugging Face credentials (HF_USERNAME, HF_TOKEN, or HF_REPO_NAME) are empty.")
         print("Skipping automatic upload.")
 
 if __name__ == "__main__":
