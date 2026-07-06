@@ -7,6 +7,7 @@ and perform 4-bit quantization (Q4_K_M) on a cloud server.
 import os
 import subprocess
 import sys
+import json
 
 # Hugging Face Configuration (Fill these in to automatically upload the converted model)
 HF_USERNAME = "Phonsiri"                      # Your Hugging Face username
@@ -26,6 +27,31 @@ def run_command(command, cwd=None):
     if process.returncode != 0:
         print(f"Error: Command failed with exit code {process.returncode}")
         sys.exit(1)
+
+def patch_tokenizer_config():
+    tokenizer_config_path = os.path.join(MODEL_NAME, "tokenizer_config.json")
+    if os.path.exists(tokenizer_config_path):
+        print(f"\n=== Patching {tokenizer_config_path} for compatibility ===")
+        try:
+            with open(tokenizer_config_path, "r", encoding="utf-8") as f:
+                config_data = json.load(f)
+            
+            patched = False
+            # Fix 'extra_special_tokens' if it's a list instead of a dict
+            if "extra_special_tokens" in config_data:
+                if isinstance(config_data["extra_special_tokens"], list):
+                    print("Found 'extra_special_tokens' as a list. Converting to an empty dict to prevent AttributeError...")
+                    config_data["extra_special_tokens"] = {}
+                    patched = True
+                    
+            if patched:
+                with open(tokenizer_config_path, "w", encoding="utf-8") as f:
+                    json.dump(config_data, f, indent=2, ensure_ascii=False)
+                print("Successfully patched tokenizer_config.json!")
+            else:
+                print("No patching required.")
+        except Exception as e:
+            print(f"Warning: Failed to patch tokenizer_config.json: {e}")
 
 def main():
     print("=== Step 1: Installing dependencies ===")
@@ -55,6 +81,9 @@ def main():
         ignore_patterns=["*.gguf", "*.bin"]
     )
     print("Download finished.")
+
+    # Patch tokenizer before converting to avoid AttributeError in transformers
+    patch_tokenizer_config()
 
     print("\n=== Step 4: Converting HF model to GGUF f16 ===")
     convert_script = os.path.join("llama.cpp", "convert_hf_to_gguf.py")

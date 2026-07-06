@@ -61,6 +61,21 @@ snapshot_download(
 print('Download complete!')
 "
 
+# Patch tokenizer_config.json to prevent AttributeError: 'list' object has no attribute 'keys'
+echo "=== Patching tokenizer_config.json ==="
+python3 -c "
+import json, os
+path = './$MODEL_NAME/tokenizer_config.json'
+if os.path.exists(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    if 'extra_special_tokens' in data and isinstance(data['extra_special_tokens'], list):
+        print('Converting extra_special_tokens list to empty dict...')
+        data['extra_special_tokens'] = {}
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+"
+
 echo "=== 4. Converting Model to f16 GGUF Format ==="
 # Run llama.cpp conversion script
 python3 llama.cpp/convert_hf_to_gguf.py ./$MODEL_NAME \
